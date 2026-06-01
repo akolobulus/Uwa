@@ -305,7 +305,7 @@ export default function Home() {
                   className="h-auto w-full rounded-[5%] drop-shadow-2xl"
                   height={1024}
                   priority
-                  src="./hero.png"
+                  src="hero.png"
                   width={1024}
                 />
               </div>
