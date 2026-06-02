@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import authIllustration from "./auth.png";
 
@@ -236,6 +237,7 @@ function AuthIllustration({ compact = false }: { compact?: boolean }) {
 }
 
 export default function NurtureAuthPortal() {
+  const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
@@ -272,6 +274,12 @@ export default function NurtureAuthPortal() {
     setSubmitState("loading");
     window.setTimeout(() => {
       setSubmitState("success");
+      // Redirect based on role
+      if (activeRole === "clinician") {
+        router.push("/clinician/dashboard");
+      } else {
+        router.push("/mother/dashboard");
+      }
     }, 1000);
   }
 
