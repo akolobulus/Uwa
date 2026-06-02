@@ -45,7 +45,7 @@ const roleDetails: Record<
     identityPlaceholder: "e.g. HOS-2024-8831",
     identityType: "text",
     signupExtraLabel: "Facility name",
-    signupExtraPlaceholder: "Uwa Memorial Clinic",
+    signupExtraPlaceholder: "Nurture Memorial Clinic",
     signupExtraIcon: "local_hospital",
   },
 };
@@ -235,7 +235,7 @@ function AuthIllustration({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export default function UwaAuthPortal() {
+export default function NurtureAuthPortal() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
@@ -284,13 +284,13 @@ export default function UwaAuthPortal() {
             style={{ width: "min(36rem, 100%)" }}
           >
             <Link
-              aria-label="Go to Uwa home"
+              aria-label="Go to Nurture home"
               className="mb-gutter inline-flex items-center gap-3 transition-transform active:scale-95"
               href="/"
             >
               <LogoMark size="h-12 w-12" />
               <span className="font-mother-headline text-[28px] text-primary">
-                Uwa
+                Nurture
               </span>
             </Link>
 
@@ -299,7 +299,7 @@ export default function UwaAuthPortal() {
             </h1>
             <p className="text-body-lg max-w-[36rem] whitespace-normal break-normal text-on-surface-variant">
               The bridge between precision clinical data and the intimate
-              journey of motherhood. Uwa safeguards the future with predictive
+              journey of motherhood. Nurture safeguards the future with predictive
               care.
             </p>
           </div>
@@ -333,12 +333,12 @@ export default function UwaAuthPortal() {
 
         <section className="relative flex min-h-screen items-center justify-center px-margin-mobile py-xl md:px-gutter">
           <Link
-            aria-label="Go to Uwa home"
+            aria-label="Go to Nurture home"
             className="absolute left-margin-mobile top-8 flex items-center gap-3 transition-transform active:scale-95 lg:hidden"
             href="/"
           >
             <LogoMark />
-            <span className="font-mother-headline text-primary">Uwa</span>
+            <span className="font-mother-headline text-primary">Nurture</span>
           </Link>
 
           <div
@@ -381,7 +381,7 @@ export default function UwaAuthPortal() {
                         {role.title} account
                       </p>
                       <p className="text-[14px] leading-5 text-on-surface-variant">
-                        Secure onboarding for your Uwa portal.
+                        Secure onboarding for your Nurture portal.
                       </p>
                     </div>
                   </div>
@@ -469,7 +469,7 @@ export default function UwaAuthPortal() {
                           required
                           type="checkbox"
                         />
-                        <span>I agree to the Uwa Terms and Privacy Policy.</span>
+                        <span>I agree to the Nurture Terms and Privacy Policy.</span>
                       </label>
 
                       <button
@@ -588,7 +588,7 @@ export default function UwaAuthPortal() {
                         </div>
                         <div className="relative flex justify-center text-[10px] uppercase">
                           <span className="bg-white/80 px-2 font-label-md text-on-surface-variant">
-                            New to Uwa?
+                            New to Nurture?
                           </span>
                         </div>
                       </div>

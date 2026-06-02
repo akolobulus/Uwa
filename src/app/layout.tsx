@@ -17,7 +17,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Uwa | Preventing Maternal Mortality with ML",
+  title: "Nurture | Preventing Maternal Mortality with ML",
   description: "Preventing Maternal Mortality with ML",
 };
 

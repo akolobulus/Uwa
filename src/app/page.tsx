@@ -40,7 +40,7 @@ const solutionCards = [
     icon: "timer",
     title: "Earlier Intervention",
     background: "linear-gradient(135deg, #ffdada 0%, #ffffff 100%)",
-    body: "Earlier intervention and improved clinical preparation have been shown to prevent nearly two-thirds of severe maternal complications. Uwa's ML models flag high-risk patients as soon as the first visit.",
+    body: "Earlier intervention and improved clinical preparation have been shown to prevent nearly two-thirds of severe maternal complications. Nurture's ML models flag high-risk patients as soon as the first visit.",
   },
   {
     icon: "stethoscope",
@@ -52,7 +52,7 @@ const solutionCards = [
     icon: "book_open",
     title: "Empowered Mothers",
     background: "linear-gradient(135deg, #ffdadb 0%, #ffffff 100%)",
-    body: "Through 60-second daily lessons in English, Yoruba, Hausa, and Igbo, Uwa teaches mothers about warning signs and debunks harmful myths. An informed mother is a safer mother.",
+    body: "Through 60-second daily lessons in English, Yoruba, Hausa, and Igbo, Nurture teaches mothers about warning signs and debunks harmful myths. An informed mother is a safer mother.",
   },
 ];
 
@@ -248,7 +248,7 @@ export default function Home() {
           >
             <LogoMark />
             <span className="font-mother-headline text-mother-headline tracking-tight text-primary">
-              Uwa
+              Nurture
             </span>
           </a>
 
@@ -327,7 +327,7 @@ export default function Home() {
               </h1>
               <p className="font-body-lg text-body-lg mb-lg max-w-2xl leading-relaxed text-on-surface-variant">
                 A woman in Nigeria faces a 1 in 19 lifetime risk of dying during
-                childbirth. Uwa uses predictive machine learning to give doctors
+                childbirth. Nurture uses predictive machine learning to give doctors
                 the weeks, months, and insights they need to intervene and save
                 lives early.
               </p>
@@ -605,13 +605,13 @@ export default function Home() {
           id="mission"
         >
           <div className="reveal-child relative mx-auto max-w-5xl overflow-hidden rounded-[2.5rem] bg-primary p-lg text-center shadow-2xl md:p-xl">
-            <div className="uwa-dot-pattern absolute inset-0 opacity-10 pointer-events-none" />
+            <div className="nurture-dot-pattern absolute inset-0 opacity-10 pointer-events-none" />
             <h2 className="font-display-lg-mobile text-display-lg-mobile relative z-10 mb-6 text-on-primary md:font-headline-md md:text-headline-md">
               Join the Mission to Protect Life
             </h2>
             <p className="font-body-lg text-body-lg relative z-10 mx-auto mb-lg max-w-2xl text-on-primary-container">
               Whether you are a clinician looking to save more lives or a mother
-              seeking the best care, Uwa is your partner in this journey.
+              seeking the best care, Nurture is your partner in this journey.
             </p>
             <div className="relative z-10 flex flex-col justify-center gap-4 sm:flex-row">
               <a
@@ -637,7 +637,7 @@ export default function Home() {
             <div className="mb-6 flex items-center gap-3">
               <LogoMark size="h-8 w-8" />
               <span className="font-mother-headline text-[20px] text-primary">
-                Uwa
+                Nurture
               </span>
             </div>
             <p className="block w-full max-w-[24rem] whitespace-normal break-normal text-left text-[14px] leading-relaxed text-on-surface-variant">
@@ -661,14 +661,14 @@ export default function Home() {
           <div className="flex items-start justify-start md:col-span-1 md:items-end">
             <div className="flex gap-4">
               <a
-                aria-label="Share Uwa"
+                aria-label="Share Nurture"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-highest transition-all hover:text-primary"
                 href="#"
               >
                 <MaterialIcon className="text-[20px]">share</MaterialIcon>
               </a>
               <a
-                aria-label="Email Uwa"
+                aria-label="Email Nurture"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-highest transition-all hover:text-primary"
                 href="#"
               >
@@ -680,7 +680,7 @@ export default function Home() {
 
         <div className="mx-auto mt-xl flex max-w-7xl flex-col items-center justify-between gap-4 border-t border-outline-variant pt-base md:flex-row">
           <p className="text-[12px] text-on-surface-variant">
-            &copy; 2026 Uwa Health Technologies. All rights reserved.
+            &copy; 2026 Nurture Health Technologies. All rights reserved.
           </p>
           <div className="flex gap-lg">
             <span className="flex items-center gap-1 text-[12px] text-on-surface-variant">

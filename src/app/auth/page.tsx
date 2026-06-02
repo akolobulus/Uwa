@@ -1,5 +1,5 @@
-import UwaAuthPortal from "./uwa-auth-portal";
+import NurtureAuthPortal from "./uwa-auth-portal";
 
 export default function AuthRoutePage() {
-  return <UwaAuthPortal />;
+  return <NurtureAuthPortal />;
 }
