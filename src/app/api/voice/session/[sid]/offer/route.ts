@@ -14,7 +14,14 @@ type RouteContext = {
 export async function POST(req: NextRequest, context: RouteContext) {
   // 1. Explicitly unwrap the dynamic route parameters promise
   const { sid } = await context.params;
-  const body = await req.json();
+  
+  // Clean Fix: Read body as text first to verify it isn't empty
+  const rawText = await req.text();
+  if (!rawText) {
+    return NextResponse.json({ error: "Empty signaling payload received" }, { status: 400 });
+  }
+  
+  const body = JSON.parse(rawText);
 
   // 2. Forward signaling details to Aethex using the unwrapped variable
   const res = await fetch(`https://api.aethexai.com/api/v1/conversation/${sid}/offer`, {
