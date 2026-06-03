@@ -29,6 +29,10 @@ type Visit = {
   notes?: string;
   oedema?: string;
   protein?: string;
+  riskComposite?: number;
+  riskColour?: string;
+  riskPriority?: string;
+  scoredAt?: string;
 };
 
 type Patient = {
@@ -143,28 +147,42 @@ export default function ClinicianDashboard() {
       return;
     }
 
-    // Prevent duplicate submissions
     if (isSubmittingPatient) return;
-    setIsSubmittingPatient(true);
 
     try {
-      // Calculate age from date of birth
+      // 1. Structural Boundaries Check
       const birthDate = new Date(patientForm.dateOfBirth);
       const today = new Date();
+      if (birthDate > today) throw new Error("Date of Birth cannot be a future date.");
+
       let age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
         age--;
       }
 
+      if (age < 10 || age > 65) throw new Error("Patient age must be logically confined between 10 and 65 years for maternal assessments.");
+
+      const gestationWeek = parseInt(patientForm.week);
+      if (isNaN(gestationWeek) || gestationWeek < 1 || gestationWeek > 43) {
+        throw new Error("Gestational week index must be an integer between 1 and 43 weeks.");
+      }
+
+      const parsedGravidity = patientForm.gravidity ? parseInt(patientForm.gravidity) : 1;
+      if (isNaN(parsedGravidity) || parsedGravidity < 1 || parsedGravidity > 20) {
+        throw new Error("Gravidity input must be valid clinical integer metrics (1 to 20).");
+      }
+
+      setIsSubmittingPatient(true);
+
       const newPatient = {
-        id: 'p_' + Date.now(),
-        name: patientForm.name,
+        id: crypto.randomUUID(),
+        name: patientForm.name.trim(),
         age: age,
-        state: patientForm.state,
-        week: parseInt(patientForm.week),
+        state: patientForm.state || "Unknown",
+        week: gestationWeek,
         ancWeek: patientForm.ancWeek ? parseInt(patientForm.ancWeek) : undefined,
-        gravidity: patientForm.gravidity ? parseInt(patientForm.gravidity) : undefined,
+        gravidity: parsedGravidity,
         scd: patientForm.scd,
         hiv: patientForm.hiv,
         malaria: patientForm.malaria,
@@ -172,7 +190,7 @@ export default function ClinicianDashboard() {
         htn: patientForm.htn,
         multiple: patientForm.multiple,
         facility: patientForm.facility,
-        multiparity: patientForm.multiparity,
+        multiparity: parsedGravidity >= 5 ? "1" : "0",
         visits: [],
         createdAt: new Date().toISOString(),
       };
@@ -183,7 +201,7 @@ export default function ClinicianDashboard() {
         body: JSON.stringify(newPatient),
       });
 
-      if (!res.ok) { alert('Failed to save patient.'); return; }
+      if (!res.ok) throw new Error('Database response rejection failed verification.');
 
       await loadPatients();
       setShowAddPatientModal(false);
@@ -192,9 +210,9 @@ export default function ClinicianDashboard() {
         multiple:'0', facility:'1', multiparity:'0' });
       setActivePatientId(newPatient.id);
       setActiveView('detail');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding patient:', err);
-      alert('An error occurred while saving the patient.');
+      alert(err.message || 'An error occurred while saving the patient.');
     } finally {
       setIsSubmittingPatient(false);
     }
@@ -206,37 +224,59 @@ export default function ClinicianDashboard() {
       return;
     }
 
-    // Prevent duplicate submissions
     if (isSubmittingVisit) return;
-    setIsSubmittingVisit(true);
 
     try {
+      // 2. Comprehensive Out-Of-Bounds Clinical Guard Rails
+      const sbp = parseInt(visitForm.sbp);
+      const dbp = parseInt(visitForm.dbp);
+      if (isNaN(sbp) || sbp < 60 || sbp > 250 || isNaN(dbp) || dbp < 30 || dbp > 160) {
+        throw new Error("Out-of-bounds warning: Verify blood pressure values (Systolic: 60-250, Diastolic: 30-160).");
+      }
+
+      if (visitForm.temp) {
+        const temp = parseFloat(visitForm.temp);
+        if (isNaN(temp) || temp < 32.0 || temp > 43.0) {
+          throw new Error("Invalid Temperature entry. Values must range realistically between 32.0°C and 43.0°C.");
+        }
+      }
+
+      if (visitForm.bs) {
+        const bs = parseFloat(visitForm.bs);
+        if (isNaN(bs) || bs < 1.5 || bs > 35.0) {
+          throw new Error("Blood Sugar input out of logical metric boundaries (1.5 mmol/L - 35.0 mmol/L).");
+        }
+      }
+
       const patient = patients.find((p) => p.id === activePatientId);
-      if (!patient) return;
+      if (!patient) throw new Error("Active clinical user profile resolution failed.");
+
+      setIsSubmittingVisit(true);
+      setEngineStatus('unknown');
 
       const newVisit = {
-        id: 'v_' + Date.now(),
+        id: crypto.randomUUID(),
         patientId: activePatientId,
         date: visitForm.date,
-        week: visitForm.week ? parseInt(visitForm.week) : undefined,
-        sbp: parseInt(visitForm.sbp),
-        dbp: parseInt(visitForm.dbp),
+        week: visitForm.week ? parseInt(visitForm.week) : patient.week,
+        sbp: sbp,
+        dbp: dbp,
         hr: visitForm.hr ? parseInt(visitForm.hr) : undefined,
         bs: visitForm.bs ? parseFloat(visitForm.bs) : undefined,
         temp: visitForm.temp ? parseFloat(visitForm.temp) : undefined,
         weight: visitForm.weight ? parseFloat(visitForm.weight) : undefined,
-        notes: visitForm.notes,
+        notes: visitForm.notes ? visitForm.notes.trim() : "",
         oedema: visitForm.oedema,
         protein: visitForm.protein,
       };
-
-      setEngineStatus('unknown');
 
       const res = await fetch('/api/patients/visit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visit: newVisit, patient }),
       });
+
+      if (!res.ok) throw new Error("Unable to save visit log to system channels.");
 
       const result = await res.json();
       setEngineStatus(result.scored ? 'online' : 'offline');
@@ -245,96 +285,58 @@ export default function ClinicianDashboard() {
       setShowAddVisitModal(false);
       setVisitForm({ date: new Date().toISOString().split('T')[0], week:'', sbp:'',
         dbp:'', hr:'', bs:'', temp:'', weight:'', notes:'', oedema:'none', protein:'none' });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding visit:', err);
-      alert('An error occurred while saving the visit.');
+      alert(err.message || 'An error occurred while saving the visit.');
     } finally {
       setIsSubmittingVisit(false);
     }
   };
 
-  const scorePatient = (p: Patient, vitals?: { sbp: number; dbp: number; bs?: number; hr?: number }): Risk => {
-    const sbp = vitals?.sbp ?? 110;
-    const dbp = vitals?.dbp ?? 70;
-    const bs = vitals?.bs ?? 6.0;
-    const hr = vitals?.hr ?? 75;
-    const scd = { AA: 0, AS: 1, SC: 2, SS: 3 }[p.scd] ?? 0;
-    const malaria = parseInt(p.malaria) || 0;
-    const hiv = { Negative: 0, Unknown: 0.2, Positive_ART: 0.5, Positive_No_ART: 1.0 }[p.hiv] || 0;
-    const lateANC = ((p.ancWeek ?? 40) >= 20) ? 1 : 0;
-    const htn = parseInt(p.htn) || 0;
-    const multi = parseInt(p.multiple) || 0;
-    const grandM = parseInt(p.multiparity) || 0;
-
-    const riskBase = (sbp > 140 || dbp > 90) ? 0.7 : (sbp > 130 || dbp > 85) ? 0.4 : 0.1;
-    const pph = (
-      riskBase * 0.35 +
-      (scd / 3) * 0.2 +
-      (bs < 7.0 ? 1 : 0) * 0.15 +
-      (malaria / 2) * 0.15 +
-      grandM * 0.1 +
-      multi * 0.05
-    );
-
-    const pre = (
-      (sbp >= 140 ? 1 : 0) * 0.35 +
-      (dbp >= 90 ? 1 : 0) * 0.25 +
-      htn * 0.2 +
-      lateANC * 0.1 +
-      multi * 0.05 +
-      ((parseInt(p.age.toString()) < 18 || parseInt(p.age.toString()) > 35) ? 1 : 0) * 0.05
-    );
-
-    const ptl = (
-      riskBase * 0.3 +
-      (malaria / 2) * 0.25 +
-      hiv * 0.2 +
-      (scd / 3) * 0.15 +
-      lateANC * 0.1
-    );
-
-    const pphPct = Math.min(99, Math.round(pph * 100));
-    const prePct = Math.min(99, Math.round(pre * 100));
-    const ptlPct = Math.min(99, Math.round(ptl * 100));
-    const composite = Math.max(pphPct, prePct, ptlPct);
-
-    const flags = {
-      pph: pphPct >= 25,
-      pre: prePct >= 25,
-      ptl: ptlPct >= 25,
-    };
-
-    let priority, colour: "critical" | "high" | "moderate" | "low";
-    if (composite >= 70) {
-      priority = "🚨 CRITICAL";
-      colour = "critical";
-    } else if (composite >= 50) {
-      priority = "⚠️ HIGH";
-      colour = "high";
-    } else if (composite >= 30) {
-      priority = "🟡 MODERATE";
-      colour = "moderate";
-    } else {
-      priority = "✅ LOW";
-      colour = "low";
+  const getMlRiskData = (p: Patient): Risk => {
+    // Pure ML-driven data reader: no client-side calculations
+    // If the patient is brand new and has no logged clinical visits yet
+    if (!p.visits || p.visits.length === 0) {
+      return {
+        composite: 0,
+        colour: "low",
+        priority: "⏳ NO VISITS LOGGED",
+        flags: { pph: false, pre: false, ptl: false },
+        drivers: [],
+        pph: 0,
+        pre: 0,
+        ptl: 0,
+      };
     }
 
-    const drivers = [];
-    if (sbp >= 140 || dbp >= 90) drivers.push("Hypertensive BP");
-    if (scd >= 2) drivers.push("SCD genotype");
-    if (malaria >= 2) drivers.push("Malaria episodes");
-    if (hiv > 0.4) drivers.push("HIV co-infection");
-    if (lateANC) drivers.push("Late ANC booking");
-    if (multi) drivers.push("Multiple gestation");
-    if (htn) drivers.push("Prior hypertension");
-
-    return { pph: pphPct, pre: prePct, ptl: ptlPct, composite, flags, priority, colour, drivers };
-  };
-
-  const getLatestVitals = (p: Patient) => {
-    if (!p.visits || !p.visits.length) return null;
+    // Find the latest checkup visit row sorted by calendar date
     const sorted = [...p.visits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return { sbp: sorted[0].sbp, dbp: sorted[0].dbp, bs: sorted[0].bs, hr: sorted[0].hr };
+    const latestVisit = sorted[0];
+
+    // Read the ML results that came back from Render and were stored in Supabase
+    const composite = latestVisit.riskComposite ?? 0;
+    const colour = (latestVisit.riskColour?.toLowerCase() || "low") as "critical" | "high" | "moderate" | "low";
+    const priority = latestVisit.riskPriority || "PENDING EVALUATION";
+
+    // Split flags based on ML threshold
+    const flags = {
+      pph: composite >= 25,
+      pre: composite >= 25,
+      ptl: composite >= 25,
+    };
+
+    const drivers = latestVisit.notes ? ["Clinical History Note Included"] : [];
+
+    return {
+      composite,
+      colour,
+      priority,
+      flags,
+      drivers,
+      pph: 0,
+      pre: 0,
+      ptl: 0,
+    };
   };
 
   const getRiskColor = (colour: string) => {
@@ -384,9 +386,9 @@ export default function ClinicianDashboard() {
           >
             <MaterialIcon>people</MaterialIcon>
             Patients
-            {patients.filter((p) => scorePatient(p, getLatestVitals(p) || undefined).colour === "critical").length > 0 && (
+            {patients.filter((p) => getMlRiskData(p).colour === "critical").length > 0 && (
               <span className="ml-auto bg-red-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
-                {patients.filter((p) => scorePatient(p, getLatestVitals(p) || undefined).colour === "critical").length}
+                {patients.filter((p) => getMlRiskData(p).colour === "critical").length}
               </span>
             )}
           </button>
@@ -462,9 +464,9 @@ export default function ClinicianDashboard() {
           {/* NEW VOICE CONTROLLER INTERFACE */}
           {activeView === "overview" && <VoiceAssistant onRefreshRequired={loadPatients} />}
 
-          {activeView === "overview" && <OverviewView patients={patients} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} setActiveView={setActiveView} setActivePatientId={setActivePatientId} setShowAddPatientModal={setShowAddPatientModal} />}
-          {activeView === "patients" && <PatientsView patients={patients} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} searchQuery={searchQuery} setActiveView={setActiveView} setActivePatientId={setActivePatientId} />}
-          {activeView === "detail" && <DetailView patient={patients.find((p) => p.id === activePatientId)} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} setActiveView={setActiveView} setShowAddVisitModal={setShowAddVisitModal} />}
+          {activeView === "overview" && <OverviewView patients={patients} getMlRiskData={getMlRiskData} getRiskColor={getRiskColor} setActiveView={setActiveView} setActivePatientId={setActivePatientId} setShowAddPatientModal={setShowAddPatientModal} />}
+          {activeView === "patients" && <PatientsView patients={patients} getMlRiskData={getMlRiskData} getRiskColor={getRiskColor} searchQuery={searchQuery} setActiveView={setActiveView} setActivePatientId={setActivePatientId} />}
+          {activeView === "detail" && <DetailView patient={patients.find((p) => p.id === activePatientId)} getMlRiskData={getMlRiskData} getRiskColor={getRiskColor} setActiveView={setActiveView} setShowAddVisitModal={setShowAddVisitModal} />}
           {activeView === "education" && <EducationView />}
         </div>
       </div>
@@ -628,8 +630,8 @@ export default function ClinicianDashboard() {
   );
 }
 
-function OverviewView({ patients, scorePatient, getLatestVitals, getRiskColor, setActiveView, setActivePatientId, setShowAddPatientModal }: any) {
-  const scored = patients.map((p: Patient) => ({ ...p, risk: scorePatient(p, getLatestVitals(p) || undefined) }));
+function OverviewView({ patients, getMlRiskData, getRiskColor, setActiveView, setActivePatientId, setShowAddPatientModal }: any) {
+  const scored = patients.map((p: Patient) => ({ ...p, risk: getMlRiskData(p) }));
   const critical = scored.filter((p: any) => p.risk.colour === "critical").length;
   const high = scored.filter((p: any) => p.risk.colour === "high").length;
   const safe = scored.filter((p: any) => p.risk.colour === "low" || p.risk.colour === "moderate").length;
@@ -665,11 +667,11 @@ function OverviewView({ patients, scorePatient, getLatestVitals, getRiskColor, s
   );
 }
 
-function PatientsView({ patients, scorePatient, getLatestVitals, getRiskColor, searchQuery, setActiveView, setActivePatientId }: any) {
+function PatientsView({ patients, getMlRiskData, getRiskColor, searchQuery, setActiveView, setActivePatientId }: any) {
   const filtered = patients.filter((p: Patient) =>
     !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.state || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const scored = filtered.map((p: Patient) => ({ ...p, risk: scorePatient(p, getLatestVitals(p) || undefined) }));
+  const scored = filtered.map((p: Patient) => ({ ...p, risk: getMlRiskData(p) }));
 
   return (
     <div>
@@ -689,11 +691,10 @@ function PatientsView({ patients, scorePatient, getLatestVitals, getRiskColor, s
   );
 }
 
-function DetailView({ patient, scorePatient, getLatestVitals, getRiskColor, setActiveView, setShowAddVisitModal }: any) {
+function DetailView({ patient, getMlRiskData, getRiskColor, setActiveView, setShowAddVisitModal }: any) {
   if (!patient) return null;
 
-  const latestVitals = getLatestVitals(patient);
-  const risk = scorePatient(patient, latestVitals || undefined);
+  const risk = getMlRiskData(patient);
   const initials = patient.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
   const visits = patient.visits ? [...patient.visits].sort((a: Visit, b: Visit) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
 

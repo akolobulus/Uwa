@@ -184,10 +184,12 @@ export async function POST(req: NextRequest) {
     oedema: visit.oedema ?? null,
     protein: visit.protein ?? null,
     
-    // Save predictive results directly onto the specific clinical checkup
-    risk_composite: engineResult?.uwa_composite_score ?? null,
-    risk_colour: engineResult?.uwa_priority_colour ?? null,
-    risk_priority: engineResult?.note?.[0]?.text ?? null,
+    // Extract custom parameters directly from our modified Python inference response dictionary
+    risk_composite: engineResult?.composite_score ?? null,
+    risk_colour: engineResult?.priority_colour ?? "GREEN",
+    
+    // Extract the live Groq generated explanation strings for easy reading
+    risk_priority: engineResult?.conditions?.Preeclamp?.top_drivers || engineResult?.priority || null,
     scored_at: scored ? new Date().toISOString() : null
   });
 

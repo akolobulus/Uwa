@@ -52,6 +52,10 @@ export async function GET() {
       notes: v.notes,
       oedema: v.oedema,
       protein: v.protein,
+      riskComposite: v.risk_composite,
+      riskColour: v.risk_colour,
+      riskPriority: v.risk_priority,
+      scoredAt: v.scored_at,
     })),
   }));
 
