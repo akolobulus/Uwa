@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import VoiceAssistant from "@/components/VoiceAssistant";
 
 type Risk = {
   pph: number;
@@ -458,6 +459,9 @@ export default function ClinicianDashboard() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-7">
+          {/* NEW VOICE CONTROLLER INTERFACE */}
+          {activeView === "overview" && <VoiceAssistant onRefreshRequired={loadPatients} />}
+
           {activeView === "overview" && <OverviewView patients={patients} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} setActiveView={setActiveView} setActivePatientId={setActivePatientId} setShowAddPatientModal={setShowAddPatientModal} />}
           {activeView === "patients" && <PatientsView patients={patients} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} searchQuery={searchQuery} setActiveView={setActiveView} setActivePatientId={setActivePatientId} />}
           {activeView === "detail" && <DetailView patient={patients.find((p) => p.id === activePatientId)} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} setActiveView={setActiveView} setShowAddVisitModal={setShowAddVisitModal} />}

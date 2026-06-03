@@ -326,10 +326,10 @@ export default function Home() {
                 Nigeria.
               </h1>
               <p className="font-body-lg text-body-lg mb-lg max-w-2xl leading-relaxed text-on-surface-variant">
-                A woman in Nigeria faces a 1 in 19 lifetime risk of dying during
-                childbirth. Nurture uses predictive machine learning to give doctors
-                the weeks, months, and insights they need to intervene and save
-                lives early.
+                Detecting pregnancy complications before they become emergencies.
+                <br />
+                <br />
+                An early warning system that helps clinicians identify high-risk pregnancies sooner, enabling earlier intervention, safer deliveries, and better outcomes for mothers and babies.
               </p>
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Link
