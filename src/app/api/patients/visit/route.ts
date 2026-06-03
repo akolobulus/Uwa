@@ -141,39 +141,14 @@ export async function POST(req: NextRequest) {
   const { visit, patient } = await req.json();
 
   if (!visit || !patient) {
-    return NextResponse.json({ error: 'visit and patient are required' }, { status: 400 });
+    return NextResponse.json({ error: 'visit and patient data contexts required' }, { status: 400 });
   }
 
-  // 1. Append visit to patient row in Supabase
-  // Fetch current visits first, then push the new one
-  const { data: row, error: fetchErr } = await supabase
-    .from('patients')
-    .select('visits')
-    .eq('id', patient.id)
-    .single();
-
-  if (fetchErr) {
-    console.error('Failed to fetch patient for visit append:', fetchErr);
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
-  }
-
-  const updatedVisits = [...(row?.visits ?? []), visit];
-
-  const { error: updateErr } = await supabase
-    .from('patients')
-    .update({ visits: updatedVisits })
-    .eq('id', patient.id);
-
-  if (updateErr) {
-    console.error('Failed to append visit:', updateErr);
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
-  }
-
-  // 2. Send FHIR bundle to Colab engine (non-blocking on failure)
+  // 1. Process standard non-blocking predictive analytics via Colab Pipeline Engine 
   let scored = false;
   let engineResult = null;
-
   const colabUrl = process.env.COLAB_ENGINE_URL;
+
   if (colabUrl) {
     try {
       const bundle = buildFhirBundle(patient, visit);
@@ -181,33 +156,44 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bundle),
-        // 10s timeout — Colab can be slow
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(10000), // Protect thread lifecycle
       });
 
       if (engineRes.ok) {
         engineResult = await engineRes.json();
         scored = true;
-
-        // 3. Optionally persist the risk score back onto the patient row
-        if (engineResult?.uwa_composite_score != null) {
-          await supabase
-            .from('patients')
-            .update({
-              lastRiskScore: engineResult.uwa_composite_score,
-              lastRiskColour: engineResult.uwa_priority_colour,
-              lastRiskPriority: engineResult.note?.[0]?.text ?? null,
-              lastScoredAt: new Date().toISOString(),
-            })
-            .eq('id', patient.id);
-        }
-      } else {
-        console.warn('Colab engine returned non-OK status:', engineRes.status);
       }
     } catch (err) {
-      // Engine offline or timed out — don't fail the whole request
-      console.warn('Colab engine unreachable:', err);
+      console.warn('External Predictive Pipeline Engine Unreachable:', err);
     }
+  }
+
+  // 2. Direct clean entry straight down into separate clinical relational database rows
+  const { error: insertErr } = await supabase.from('visits').insert({
+    id: visit.id,
+    patient_id: patient.id,
+    date: visit.date,
+    week: visit.week ?? null,
+    sbp: visit.sbp,
+    dbp: visit.dbp,
+    hr: visit.hr ?? null,
+    bs: visit.bs ?? null,
+    temp: visit.temp ?? null,
+    weight: visit.weight ?? null,
+    notes: visit.notes ?? null,
+    oedema: visit.oedema ?? null,
+    protein: visit.protein ?? null,
+    
+    // Save predictive results directly onto the specific clinical checkup
+    risk_composite: engineResult?.uwa_composite_score ?? null,
+    risk_colour: engineResult?.uwa_priority_colour ?? null,
+    risk_priority: engineResult?.note?.[0]?.text ?? null,
+    scored_at: scored ? new Date().toISOString() : null
+  });
+
+  if (insertErr) {
+    console.error('Relational DB Insert Block Failure:', insertErr.message);
+    return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -216,3 +202,4 @@ export async function POST(req: NextRequest) {
     engineResult,
   });
 }
+

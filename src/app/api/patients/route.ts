@@ -7,20 +7,52 @@ const supabase = createClient(
 );
 
 export async function GET() {
+  // Fetch patients and eagerly pull their relational visits ordered by date
   const { data, error } = await supabase
     .from('patients')
-    .select('*')
-    .order('createdAt', { ascending: false });
+    .select(`
+      *,
+      visits (*)
+    `)
+    .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('GET /api/patients error:', error);
+    console.error('GET /api/patients backend failure:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Each row has a visits JSONB column — default to [] if null
+  // Remap DB snake_case records seamlessly into CamelCase expected by the front-end dashboard UI component
   const patients = (data ?? []).map((p: any) => ({
-    ...p,
-    visits: p.visits ?? [],
+    id: p.id,
+    name: p.name,
+    age: p.age,
+    state: p.state,
+    week: p.week,
+    ancWeek: p.anc_week,
+    gravidity: p.gravidity,
+    scd: p.scd,
+    hiv: p.hiv,
+    malaria: p.malaria,
+    iptpDoses: p.iptp_doses,
+    htn: p.htn,
+    multiple: p.multiple,
+    facility: p.facility,
+    multiparity: p.multiparity,
+    createdAt: p.created_at,
+    visits: (p.visits ?? []).map((v: any) => ({
+      id: v.id,
+      date: v.date,
+      week: v.week,
+      sbp: v.sbp,
+      dbp: v.dbp,
+      hr: v.hr,
+      bs: v.bs,
+      temp: v.temp,
+      weight: v.weight,
+      notes: v.notes,
+      oedema: v.oedema,
+      protein: v.protein,
+    })),
   }));
 
   return NextResponse.json(patients);
@@ -29,36 +61,32 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json();
 
-  // Validate required fields
   if (!body.name || !body.age || !body.week) {
-    return NextResponse.json(
-      { error: 'name, age, and week are required' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Missing mandatory client values: name, age, week.' }, { status: 400 });
   }
 
+  // Insert securely straight down into relational snake_case mapping structure
   const { error } = await supabase.from('patients').insert({
     id: body.id,
     name: body.name,
     age: body.age,
     state: body.state ?? null,
     week: body.week,
-    ancWeek: body.ancWeek ?? null,
+    anc_week: body.ancWeek ?? null,
     gravidity: body.gravidity ?? null,
     scd: body.scd,
     hiv: body.hiv,
     malaria: body.malaria,
-    iptpDoses: body.iptpDoses,
+    iptp_doses: body.iptpDoses,
     htn: body.htn,
     multiple: body.multiple,
     facility: body.facility,
     multiparity: body.multiparity,
-    visits: [],
-    createdAt: body.createdAt,
+    created_at: body.createdAt || new Date().toISOString(),
   });
 
   if (error) {
-    console.error('POST /api/patients error:', error);
+    console.error('Database Patient Generation Failure:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

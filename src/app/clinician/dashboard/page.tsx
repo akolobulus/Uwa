@@ -80,6 +80,8 @@ export default function ClinicianDashboard() {
   const [showAddVisitModal, setShowAddVisitModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [engineStatus, setEngineStatus] = useState('unknown');
+  const [isSubmittingPatient, setIsSubmittingPatient] = useState(false);
+  const [isSubmittingVisit, setIsSubmittingVisit] = useState(false);
 
   // Form states for patient
   const [patientForm, setPatientForm] = useState({
@@ -140,50 +142,61 @@ export default function ClinicianDashboard() {
       return;
     }
 
-    // Calculate age from date of birth
-    const birthDate = new Date(patientForm.dateOfBirth);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
+    // Prevent duplicate submissions
+    if (isSubmittingPatient) return;
+    setIsSubmittingPatient(true);
+
+    try {
+      // Calculate age from date of birth
+      const birthDate = new Date(patientForm.dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+
+      const newPatient = {
+        id: 'p_' + Date.now(),
+        name: patientForm.name,
+        age: age,
+        state: patientForm.state,
+        week: parseInt(patientForm.week),
+        ancWeek: patientForm.ancWeek ? parseInt(patientForm.ancWeek) : undefined,
+        gravidity: patientForm.gravidity ? parseInt(patientForm.gravidity) : undefined,
+        scd: patientForm.scd,
+        hiv: patientForm.hiv,
+        malaria: patientForm.malaria,
+        iptpDoses: patientForm.iptpDoses,
+        htn: patientForm.htn,
+        multiple: patientForm.multiple,
+        facility: patientForm.facility,
+        multiparity: patientForm.multiparity,
+        visits: [],
+        createdAt: new Date().toISOString(),
+      };
+
+      const res = await fetch('/api/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPatient),
+      });
+
+      if (!res.ok) { alert('Failed to save patient.'); return; }
+
+      await loadPatients();
+      setShowAddPatientModal(false);
+      setPatientForm({ name:'', dateOfBirth:'', state:'', week:'', ancWeek:'', gravidity:'',
+        scd:'AA', hiv:'Negative', malaria:'0', iptpDoses:'0', htn:'0',
+        multiple:'0', facility:'1', multiparity:'0' });
+      setActivePatientId(newPatient.id);
+      setActiveView('detail');
+    } catch (err) {
+      console.error('Error adding patient:', err);
+      alert('An error occurred while saving the patient.');
+    } finally {
+      setIsSubmittingPatient(false);
     }
-
-    const newPatient = {
-      id: 'p_' + Date.now(),
-      name: patientForm.name,
-      age: age,
-      state: patientForm.state,
-      week: parseInt(patientForm.week),
-      ancWeek: patientForm.ancWeek ? parseInt(patientForm.ancWeek) : undefined,
-      gravidity: patientForm.gravidity ? parseInt(patientForm.gravidity) : undefined,
-      scd: patientForm.scd,
-      hiv: patientForm.hiv,
-      malaria: patientForm.malaria,
-      iptpDoses: patientForm.iptpDoses,
-      htn: patientForm.htn,
-      multiple: patientForm.multiple,
-      facility: patientForm.facility,
-      multiparity: patientForm.multiparity,
-      visits: [],
-      createdAt: new Date().toISOString(),
-    };
-
-    const res = await fetch('/api/patients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newPatient),
-    });
-
-    if (!res.ok) { alert('Failed to save patient.'); return; }
-
-    await loadPatients();
-    setShowAddPatientModal(false);
-    setPatientForm({ name:'', dateOfBirth:'', state:'', week:'', ancWeek:'', gravidity:'',
-      scd:'AA', hiv:'Negative', malaria:'0', iptpDoses:'0', htn:'0',
-      multiple:'0', facility:'1', multiparity:'0' });
-    setActivePatientId(newPatient.id);
-    setActiveView('detail');
   };
 
   const handleAddVisit = async () => {
@@ -192,40 +205,51 @@ export default function ClinicianDashboard() {
       return;
     }
 
-    const patient = patients.find((p) => p.id === activePatientId);
-    if (!patient) return;
+    // Prevent duplicate submissions
+    if (isSubmittingVisit) return;
+    setIsSubmittingVisit(true);
 
-    const newVisit = {
-      id: 'v_' + Date.now(),
-      patientId: activePatientId,
-      date: visitForm.date,
-      week: visitForm.week ? parseInt(visitForm.week) : undefined,
-      sbp: parseInt(visitForm.sbp),
-      dbp: parseInt(visitForm.dbp),
-      hr: visitForm.hr ? parseInt(visitForm.hr) : undefined,
-      bs: visitForm.bs ? parseFloat(visitForm.bs) : undefined,
-      temp: visitForm.temp ? parseFloat(visitForm.temp) : undefined,
-      weight: visitForm.weight ? parseFloat(visitForm.weight) : undefined,
-      notes: visitForm.notes,
-      oedema: visitForm.oedema,
-      protein: visitForm.protein,
-    };
+    try {
+      const patient = patients.find((p) => p.id === activePatientId);
+      if (!patient) return;
 
-    setEngineStatus('unknown');
+      const newVisit = {
+        id: 'v_' + Date.now(),
+        patientId: activePatientId,
+        date: visitForm.date,
+        week: visitForm.week ? parseInt(visitForm.week) : undefined,
+        sbp: parseInt(visitForm.sbp),
+        dbp: parseInt(visitForm.dbp),
+        hr: visitForm.hr ? parseInt(visitForm.hr) : undefined,
+        bs: visitForm.bs ? parseFloat(visitForm.bs) : undefined,
+        temp: visitForm.temp ? parseFloat(visitForm.temp) : undefined,
+        weight: visitForm.weight ? parseFloat(visitForm.weight) : undefined,
+        notes: visitForm.notes,
+        oedema: visitForm.oedema,
+        protein: visitForm.protein,
+      };
 
-    const res = await fetch('/api/patients/visit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visit: newVisit, patient }),
-    });
+      setEngineStatus('unknown');
 
-    const result = await res.json();
-    setEngineStatus(result.scored ? 'online' : 'offline');
+      const res = await fetch('/api/patients/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visit: newVisit, patient }),
+      });
 
-    await loadPatients();
-    setShowAddVisitModal(false);
-    setVisitForm({ date: new Date().toISOString().split('T')[0], week:'', sbp:'',
-      dbp:'', hr:'', bs:'', temp:'', weight:'', notes:'', oedema:'none', protein:'none' });
+      const result = await res.json();
+      setEngineStatus(result.scored ? 'online' : 'offline');
+
+      await loadPatients();
+      setShowAddVisitModal(false);
+      setVisitForm({ date: new Date().toISOString().split('T')[0], week:'', sbp:'',
+        dbp:'', hr:'', bs:'', temp:'', weight:'', notes:'', oedema:'none', protein:'none' });
+    } catch (err) {
+      console.error('Error adding visit:', err);
+      alert('An error occurred while saving the visit.');
+    } finally {
+      setIsSubmittingVisit(false);
+    }
   };
 
   const scorePatient = (p: Patient, vitals?: { sbp: number; dbp: number; bs?: number; hr?: number }): Risk => {
@@ -522,7 +546,9 @@ export default function ClinicianDashboard() {
 
             <div className="sticky bottom-0 bg-white border-t border-outline-variant p-6 flex gap-3 justify-end">
               <button onClick={() => setShowAddPatientModal(false)} className="px-4 py-2 border border-outline-variant rounded-lg text-sm font-bold hover:bg-surface-container">Cancel</button>
-              <button onClick={handleAddPatient} className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:brightness-110">Register Patient</button>
+              <button onClick={handleAddPatient} disabled={isSubmittingPatient} className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed">
+                {isSubmittingPatient ? 'Registering...' : 'Register Patient'}
+              </button>
             </div>
           </div>
         </div>
@@ -587,7 +613,9 @@ export default function ClinicianDashboard() {
 
             <div className="sticky bottom-0 bg-white border-t border-outline-variant p-6 flex gap-3 justify-end z-10">
               <button onClick={() => setShowAddVisitModal(false)} className="px-4 py-2 border border-outline-variant rounded-lg text-sm font-bold hover:bg-surface-container">Cancel</button>
-              <button onClick={handleAddVisit} className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:brightness-110">Save Visit</button>
+              <button onClick={handleAddVisit} disabled={isSubmittingVisit} className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed">
+                {isSubmittingVisit ? 'Saving...' : 'Save Visit'}
+              </button>
             </div>
           </div>
         </div>
