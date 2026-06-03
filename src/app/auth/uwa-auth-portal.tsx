@@ -278,7 +278,7 @@ export default function NurtureAuthPortal() {
       if (activeRole === "clinician") {
         router.push("/clinician/dashboard");
       } else {
-        router.push("/mother/dashboard");
+        router.push("/mother");
       }
     }, 1000);
   }
