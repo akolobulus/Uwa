@@ -78,11 +78,13 @@ export default function ClinicianDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddPatientModal, setShowAddPatientModal] = useState(false);
   const [showAddVisitModal, setShowAddVisitModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [engineStatus, setEngineStatus] = useState('unknown');
 
   // Form states for patient
   const [patientForm, setPatientForm] = useState({
     name: "",
-    age: "",
+    dateOfBirth: "",
     state: "",
     week: "",
     ancWeek: "",
@@ -112,30 +114,45 @@ export default function ClinicianDashboard() {
     protein: "none",
   });
 
-  // Load patients from localStorage
+  // Load from DB on mount + poll every 30s
   useEffect(() => {
-    const stored = localStorage.getItem("uwa_patients");
-    if (stored) {
-      setPatients(JSON.parse(stored));
-    }
+    loadPatients();
+    const interval = setInterval(loadPatients, 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Save patients to localStorage
-  const savePatients = (updatedPatients: Patient[]) => {
-    setPatients(updatedPatients);
-    localStorage.setItem("uwa_patients", JSON.stringify(updatedPatients));
+  const loadPatients = async () => {
+    try {
+      const res = await fetch('/api/patients');
+      if (!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
+      setPatients(data);
+    } catch (e) {
+      console.error('Failed to load patients:', e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleAddPatient = () => {
-    if (!patientForm.name || !patientForm.age || !patientForm.week) {
-      alert("Name, Age and Gestational Week are required.");
+  const handleAddPatient = async () => {
+    if (!patientForm.name || !patientForm.dateOfBirth || !patientForm.week) {
+      alert('Name, Date of Birth and Gestational Week are required.');
       return;
     }
 
-    const newPatient: Patient = {
-      id: "p_" + Date.now(),
+    // Calculate age from date of birth
+    const birthDate = new Date(patientForm.dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    const newPatient = {
+      id: 'p_' + Date.now(),
       name: patientForm.name,
-      age: parseInt(patientForm.age),
+      age: age,
       state: patientForm.state,
       week: parseInt(patientForm.week),
       ancWeek: patientForm.ancWeek ? parseInt(patientForm.ancWeek) : undefined,
@@ -152,40 +169,35 @@ export default function ClinicianDashboard() {
       createdAt: new Date().toISOString(),
     };
 
-    const updated = [...patients, newPatient];
-    savePatients(updated);
-    setShowAddPatientModal(false);
-    setPatientForm({
-      name: "",
-      age: "",
-      state: "",
-      week: "",
-      ancWeek: "",
-      gravidity: "",
-      scd: "AA",
-      hiv: "Negative",
-      malaria: "0",
-      iptpDoses: "0",
-      htn: "0",
-      multiple: "0",
-      facility: "1",
-      multiparity: "0",
+    const res = await fetch('/api/patients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newPatient),
     });
+
+    if (!res.ok) { alert('Failed to save patient.'); return; }
+
+    await loadPatients();
+    setShowAddPatientModal(false);
+    setPatientForm({ name:'', dateOfBirth:'', state:'', week:'', ancWeek:'', gravidity:'',
+      scd:'AA', hiv:'Negative', malaria:'0', iptpDoses:'0', htn:'0',
+      multiple:'0', facility:'1', multiparity:'0' });
     setActivePatientId(newPatient.id);
-    setActiveView("detail");
+    setActiveView('detail');
   };
 
-  const handleAddVisit = () => {
+  const handleAddVisit = async () => {
     if (!visitForm.sbp || !visitForm.dbp || !visitForm.date) {
-      alert("Date, Systolic BP and Diastolic BP are required.");
+      alert('Date, Systolic BP and Diastolic BP are required.');
       return;
     }
 
     const patient = patients.find((p) => p.id === activePatientId);
     if (!patient) return;
 
-    const newVisit: Visit = {
-      id: "v_" + Date.now(),
+    const newVisit = {
+      id: 'v_' + Date.now(),
+      patientId: activePatientId,
       date: visitForm.date,
       week: visitForm.week ? parseInt(visitForm.week) : undefined,
       sbp: parseInt(visitForm.sbp),
@@ -199,30 +211,24 @@ export default function ClinicianDashboard() {
       protein: visitForm.protein,
     };
 
-    const updated = patients.map((p) =>
-      p.id === activePatientId
-        ? { ...p, visits: [...(p.visits || []), newVisit] }
-        : p
-    );
+    setEngineStatus('unknown');
 
-    savePatients(updated);
-    setShowAddVisitModal(false);
-    setVisitForm({
-      date: new Date().toISOString().split("T")[0],
-      week: "",
-      sbp: "",
-      dbp: "",
-      hr: "",
-      bs: "",
-      temp: "",
-      weight: "",
-      notes: "",
-      oedema: "none",
-      protein: "none",
+    const res = await fetch('/api/patients/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visit: newVisit, patient }),
     });
+
+    const result = await res.json();
+    setEngineStatus(result.scored ? 'online' : 'offline');
+
+    await loadPatients();
+    setShowAddVisitModal(false);
+    setVisitForm({ date: new Date().toISOString().split('T')[0], week:'', sbp:'',
+      dbp:'', hr:'', bs:'', temp:'', weight:'', notes:'', oedema:'none', protein:'none' });
   };
 
-  const scorePatient = (p: Patient, vitals?: { sbp: number; dbp: number; bs: number; hr: number }): Risk => {
+  const scorePatient = (p: Patient, vitals?: { sbp: number; dbp: number; bs?: number; hr?: number }): Risk => {
     const sbp = vitals?.sbp ?? 110;
     const dbp = vitals?.dbp ?? 70;
     const bs = vitals?.bs ?? 6.0;
@@ -230,7 +236,7 @@ export default function ClinicianDashboard() {
     const scd = { AA: 0, AS: 1, SC: 2, SS: 3 }[p.scd] ?? 0;
     const malaria = parseInt(p.malaria) || 0;
     const hiv = { Negative: 0, Unknown: 0.2, Positive_ART: 0.5, Positive_No_ART: 1.0 }[p.hiv] || 0;
-    const lateANC = (parseInt(p.ancWeek || "40") >= 20) ? 1 : 0;
+    const lateANC = ((p.ancWeek ?? 40) >= 20) ? 1 : 0;
     const htn = parseInt(p.htn) || 0;
     const multi = parseInt(p.multiple) || 0;
     const grandM = parseInt(p.multiparity) || 0;
@@ -378,6 +384,11 @@ export default function ClinicianDashboard() {
           Model: <span className="text-primary">Nurture-v2.0</span>
           <br />
           Threshold: <span className="text-primary">0.25</span>
+          <br />
+          Engine:{" "}
+          <span className="text-primary">
+            {engineStatus === 'online' ? '● Live' : engineStatus === 'offline' ? '● Offline' : '● —'}
+          </span>
         </div>
 
         <button
@@ -423,7 +434,7 @@ export default function ClinicianDashboard() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-7">
-          {activeView === "overview" && <OverviewView patients={patients} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} setActiveView={setActiveView} setActivePatientId={setActivePatientId} />}
+          {activeView === "overview" && <OverviewView patients={patients} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} setActiveView={setActiveView} setActivePatientId={setActivePatientId} setShowAddPatientModal={setShowAddPatientModal} />}
           {activeView === "patients" && <PatientsView patients={patients} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} searchQuery={searchQuery} setActiveView={setActiveView} setActivePatientId={setActivePatientId} />}
           {activeView === "detail" && <DetailView patient={patients.find((p) => p.id === activePatientId)} scorePatient={scorePatient} getLatestVitals={getLatestVitals} getRiskColor={getRiskColor} setActiveView={setActiveView} setShowAddVisitModal={setShowAddVisitModal} />}
           {activeView === "education" && <EducationView />}
@@ -447,7 +458,7 @@ export default function ClinicianDashboard() {
                 <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-4">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <input type="text" placeholder="Full Name" value={patientForm.name} onChange={(e) => setPatientForm({ ...patientForm, name: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
-                  <input type="number" placeholder="Age" value={patientForm.age} onChange={(e) => setPatientForm({ ...patientForm, age: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
+                  <input type="date" placeholder="Date of Birth" value={patientForm.dateOfBirth} onChange={(e) => setPatientForm({ ...patientForm, dateOfBirth: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
                   <input type="text" placeholder="State of Origin" value={patientForm.state} onChange={(e) => setPatientForm({ ...patientForm, state: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
                   <input type="number" placeholder="Gestational Week" value={patientForm.week} onChange={(e) => setPatientForm({ ...patientForm, week: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
                   <input type="number" placeholder="ANC Booking Week" value={patientForm.ancWeek} onChange={(e) => setPatientForm({ ...patientForm, ancWeek: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
@@ -585,7 +596,7 @@ export default function ClinicianDashboard() {
   );
 }
 
-function OverviewView({ patients, scorePatient, getLatestVitals, getRiskColor, setActiveView, setActivePatientId }: any) {
+function OverviewView({ patients, scorePatient, getLatestVitals, getRiskColor, setActiveView, setActivePatientId, setShowAddPatientModal }: any) {
   const scored = patients.map((p: Patient) => ({ ...p, risk: scorePatient(p, getLatestVitals(p) || undefined) }));
   const critical = scored.filter((p: any) => p.risk.colour === "critical").length;
   const high = scored.filter((p: any) => p.risk.colour === "high").length;
@@ -610,7 +621,7 @@ function OverviewView({ patients, scorePatient, getLatestVitals, getRiskColor, s
           <div className="text-4xl text-on-surface-variant/40 mb-3">✓</div>
           <p className="text-on-surface-variant mb-4">{patients.length ? "No patients flagged. All patients are low/moderate risk." : "No patients added yet."}</p>
           {patients.length === 0 && (
-            <button className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:brightness-110">
+            <button onClick={() => setShowAddPatientModal(true)} className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:brightness-110">
               Add Patient
             </button>
           )}
@@ -776,7 +787,12 @@ function EducationView() {
   );
 }
 
-function StatCard({ label, value, color, sub }: any) {
+function StatCard({ label, value, color, sub }: {
+  label: string;
+  value: number;
+  color: "blue" | "red" | "amber" | "green";
+  sub: string;
+}) {
   const colors = {
     blue: "border-t-blue-500",
     red: "border-t-red-500",
@@ -793,7 +809,12 @@ function StatCard({ label, value, color, sub }: any) {
   );
 }
 
-function RiskScoreCard({ label, score, flagged, color }: any) {
+function RiskScoreCard({ label, score, flagged, color }: {
+  label: string;
+  score: number;
+  flagged: boolean;
+  color: "red" | "amber" | "blue";
+}) {
   const colorMap = {
     red: { text: "text-red-600", bg: "bg-red-50" },
     amber: { text: "text-amber-600", bg: "bg-amber-50" },
