@@ -413,8 +413,15 @@ export default function ClinicianDashboard() {
           Threshold: <span className="text-primary">0.25</span>
           <br />
           Engine:{" "}
-          <span className="text-primary">
-            {engineStatus === 'online' ? '● Live' : engineStatus === 'offline' ? '● Offline' : '● —'}
+          <span className={`w-2 h-2 rounded-full inline-block ${
+            engineStatus === 'online' 
+              ? 'bg-green-500 shadow-lg shadow-green-500/50' 
+              : engineStatus === 'offline' 
+              ? 'bg-red-500' 
+              : 'bg-gray-400'
+          }`} />
+          <span className="ml-2">
+            {engineStatus === 'online' ? 'Live' : engineStatus === 'offline' ? 'Offline' : 'Idle'}
           </span>
         </div>
 
