@@ -84,18 +84,18 @@ export default function ClinicianDashboard() {
   const [showAddPatientModal, setShowAddPatientModal] = useState(false);
   const [showAddVisitModal, setShowAddVisitModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [engineStatus, setEngineStatus] = useState('unknown');
+  const [engineStatus, setEngineStatus] = useState<'online' | 'offline' | 'idle'>('idle');
   const [isSubmittingPatient, setIsSubmittingPatient] = useState(false);
   const [isSubmittingVisit, setIsSubmittingVisit] = useState(false);
 
-  // Form states for patient
+  // Form states for patient aligned with Nurture-v2 ML engine features
   const [patientForm, setPatientForm] = useState({
     name: "",
     dateOfBirth: "",
     state: "",
     week: "",
     ancWeek: "",
-    gravidity: "",
+    gravidity: "1",
     scd: "AA",
     hiv: "Negative",
     malaria: "0",
@@ -103,7 +103,6 @@ export default function ClinicianDashboard() {
     htn: "0",
     multiple: "0",
     facility: "1",
-    multiparity: "0",
   });
 
   // Form states for visit
@@ -112,21 +111,33 @@ export default function ClinicianDashboard() {
     week: "",
     sbp: "",
     dbp: "",
-    hr: "",
-    bs: "",
-    temp: "",
+    hr: "75", // model default baseline
+    bs: "5.0", // model default baseline
+    temp: "37.0", // model default baseline
     weight: "",
     notes: "",
     oedema: "none",
     protein: "none",
   });
 
-  // Load from DB on mount + poll every 30s
   useEffect(() => {
     loadPatients();
+    checkEngineHealth();
     const interval = setInterval(loadPatients, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const checkEngineHealth = async () => {
+    try {
+      const res = await fetch('/api/patients/visit?health=1');
+      if (res.ok) {
+        const data = await res.json();
+        setEngineStatus(data.online ? 'online' : 'offline');
+      }
+    } catch {
+      setEngineStatus('offline');
+    }
+  };
 
   const loadPatients = async () => {
     try {
@@ -142,8 +153,8 @@ export default function ClinicianDashboard() {
   };
 
   const handleAddPatient = async () => {
-    if (!patientForm.name || !patientForm.dateOfBirth || !patientForm.week) {
-      alert('Name, Date of Birth and Gestational Week are required.');
+    if (!patientForm.name || !patientForm.dateOfBirth || !patientForm.week || !patientForm.ancWeek) {
+      alert('Name, Date of Birth, Current Week, and ANC Booking Week are mandatory.');
       return;
     }
 
@@ -161,16 +172,21 @@ export default function ClinicianDashboard() {
         age--;
       }
 
-      if (age < 10 || age > 65) throw new Error("Patient age must be logically confined between 10 and 65 years for maternal assessments.");
+      if (age < 10 || age > 65) throw new Error("Patient age must be logical for maternal assessments (10-65).");
 
       const gestationWeek = parseInt(patientForm.week);
       if (isNaN(gestationWeek) || gestationWeek < 1 || gestationWeek > 43) {
         throw new Error("Gestational week index must be an integer between 1 and 43 weeks.");
       }
 
-      const parsedGravidity = patientForm.gravidity ? parseInt(patientForm.gravidity) : 1;
-      if (isNaN(parsedGravidity) || parsedGravidity < 1 || parsedGravidity > 20) {
-        throw new Error("Gravidity input must be valid clinical integer metrics (1 to 20).");
+      const bookingWeek = parseInt(patientForm.ancWeek);
+      if (isNaN(bookingWeek) || bookingWeek < 1 || bookingWeek > 43) {
+        throw new Error("ANC Booking week index must be an integer between 1 and 43 weeks.");
+      }
+
+      const parsedGravidity = parseInt(patientForm.gravidity) || 1;
+      if (parsedGravidity < 1 || parsedGravidity > 20) {
+        throw new Error("Gravidity input must be valid clinical metrics (1 to 20).");
       }
 
       setIsSubmittingPatient(true);
@@ -181,7 +197,7 @@ export default function ClinicianDashboard() {
         age: age,
         state: patientForm.state || "Unknown",
         week: gestationWeek,
-        ancWeek: patientForm.ancWeek ? parseInt(patientForm.ancWeek) : undefined,
+        ancWeek: bookingWeek,
         gravidity: parsedGravidity,
         scd: patientForm.scd,
         hiv: patientForm.hiv,
@@ -205,9 +221,8 @@ export default function ClinicianDashboard() {
 
       await loadPatients();
       setShowAddPatientModal(false);
-      setPatientForm({ name:'', dateOfBirth:'', state:'', week:'', ancWeek:'', gravidity:'',
-        scd:'AA', hiv:'Negative', malaria:'0', iptpDoses:'0', htn:'0',
-        multiple:'0', facility:'1', multiparity:'0' });
+      setPatientForm({ name:'', dateOfBirth:'', state:'', week:'', ancWeek:'', gravidity:'1',
+        scd:'AA', hiv:'Negative', malaria:'0', iptpDoses:'0', htn:'0', multiple:'0', facility:'1' });
       setActivePatientId(newPatient.id);
       setActiveView('detail');
     } catch (err: any) {
@@ -252,7 +267,6 @@ export default function ClinicianDashboard() {
       if (!patient) throw new Error("Active clinical user profile resolution failed.");
 
       setIsSubmittingVisit(true);
-      setEngineStatus('unknown');
 
       const newVisit = {
         id: crypto.randomUUID(),
@@ -261,9 +275,9 @@ export default function ClinicianDashboard() {
         week: visitForm.week ? parseInt(visitForm.week) : patient.week,
         sbp: sbp,
         dbp: dbp,
-        hr: visitForm.hr ? parseInt(visitForm.hr) : undefined,
-        bs: visitForm.bs ? parseFloat(visitForm.bs) : undefined,
-        temp: visitForm.temp ? parseFloat(visitForm.temp) : undefined,
+        hr: visitForm.hr ? parseInt(visitForm.hr) : 75,
+        bs: visitForm.bs ? parseFloat(visitForm.bs) : 5.0,
+        temp: visitForm.temp ? parseFloat(visitForm.temp) : 37.0,
         weight: visitForm.weight ? parseFloat(visitForm.weight) : undefined,
         notes: visitForm.notes ? visitForm.notes.trim() : "",
         oedema: visitForm.oedema,
@@ -276,7 +290,7 @@ export default function ClinicianDashboard() {
         body: JSON.stringify({ visit: newVisit, patient }),
       });
 
-      if (!res.ok) throw new Error("Unable to save visit log to system channels.");
+      if (!res.ok) throw new Error("Unable to save visit log to backend channels.");
 
       const result = await res.json();
       setEngineStatus(result.scored ? 'online' : 'offline');
@@ -284,7 +298,7 @@ export default function ClinicianDashboard() {
       await loadPatients();
       setShowAddVisitModal(false);
       setVisitForm({ date: new Date().toISOString().split('T')[0], week:'', sbp:'',
-        dbp:'', hr:'', bs:'', temp:'', weight:'', notes:'', oedema:'none', protein:'none' });
+        dbp:'', hr:'75', bs:'5.0', temp:'37.0', weight:'', notes:'', oedema:'none', protein:'none' });
     } catch (err: any) {
       console.error('Error adding visit:', err);
       alert(err.message || 'An error occurred while saving the visit.');
@@ -413,14 +427,8 @@ export default function ClinicianDashboard() {
           Threshold: <span className="text-primary">0.25</span>
           <br />
           Engine:{" "}
-          <span className={`w-2 h-2 rounded-full inline-block ${
-            engineStatus === 'online' 
-              ? 'bg-green-500 shadow-lg shadow-green-500/50' 
-              : engineStatus === 'offline' 
-              ? 'bg-red-500' 
-              : 'bg-gray-400'
-          }`} />
-          <span className="ml-2">
+          <span className={`w-2 h-2 rounded-full inline-block ${engineStatus === 'online' ? 'bg-green-500 shadow-lg shadow-green-500/50' : engineStatus === 'offline' ? 'bg-red-500' : 'bg-gray-400'}`} />
+          <span className="ml-2 uppercase text-[10px] font-bold">
             {engineStatus === 'online' ? 'Live' : engineStatus === 'offline' ? 'Offline' : 'Idle'}
           </span>
         </div>
@@ -583,38 +591,68 @@ export default function ClinicianDashboard() {
               <div>
                 <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-4">Visit Info</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="date" value={visitForm.date} onChange={(e) => setVisitForm({ ...visitForm, date: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
-                  <input type="number" placeholder="Gestational Week" value={visitForm.week} onChange={(e) => setVisitForm({ ...visitForm, week: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Visit Date</label>
+                    <input type="date" value={visitForm.date} onChange={(e) => setVisitForm({ ...visitForm, date: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Gestational Week</label>
+                    <input type="number" min="1" max="43" placeholder="e.g. 20" value={visitForm.week} onChange={(e) => setVisitForm({ ...visitForm, week: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
                 </div>
               </div>
 
               <div>
-                <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-4">Vitals</h3>
+                <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-4">Vital Signs</h3>
                 <div className="grid grid-cols-3 gap-4">
-                  <input type="number" placeholder="Systolic BP" value={visitForm.sbp} onChange={(e) => setVisitForm({ ...visitForm, sbp: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
-                  <input type="number" placeholder="Diastolic BP" value={visitForm.dbp} onChange={(e) => setVisitForm({ ...visitForm, dbp: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
-                  <input type="number" placeholder="Heart Rate" value={visitForm.hr} onChange={(e) => setVisitForm({ ...visitForm, hr: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
-                  <input type="number" placeholder="Blood Sugar" value={visitForm.bs} onChange={(e) => setVisitForm({ ...visitForm, bs: e.target.value })} step="0.1" className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
-                  <input type="number" placeholder="Temperature" value={visitForm.temp} onChange={(e) => setVisitForm({ ...visitForm, temp: e.target.value })} step="0.1" className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
-                  <input type="number" placeholder="Weight (kg)" value={visitForm.weight} onChange={(e) => setVisitForm({ ...visitForm, weight: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm" />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Systolic BP (mmHg)</label>
+                    <input type="number" min="60" max="250" placeholder="e.g. 120" value={visitForm.sbp} onChange={(e) => setVisitForm({ ...visitForm, sbp: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Diastolic BP (mmHg)</label>
+                    <input type="number" min="30" max="160" placeholder="e.g. 80" value={visitForm.dbp} onChange={(e) => setVisitForm({ ...visitForm, dbp: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Heart Rate (bpm)</label>
+                    <input type="number" min="40" max="200" placeholder="e.g. 75" value={visitForm.hr} onChange={(e) => setVisitForm({ ...visitForm, hr: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Blood Sugar (mmol/L)</label>
+                    <input type="number" min="1.5" max="35" placeholder="e.g. 5.0" value={visitForm.bs} onChange={(e) => setVisitForm({ ...visitForm, bs: e.target.value })} step="0.1" className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Temperature (°C)</label>
+                    <input type="number" min="32" max="43" placeholder="e.g. 37.0" value={visitForm.temp} onChange={(e) => setVisitForm({ ...visitForm, temp: e.target.value })} step="0.1" className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Weight (kg)</label>
+                    <input type="number" min="30" max="200" placeholder="e.g. 65" value={visitForm.weight} onChange={(e) => setVisitForm({ ...visitForm, weight: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface" />
+                  </div>
                 </div>
               </div>
 
               <div>
                 <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-4">Clinical Observations</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <select value={visitForm.oedema} onChange={(e) => setVisitForm({ ...visitForm, oedema: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm">
-                    <option value="">Oedema</option>
-                    <option value="none">None</option>
-                    <option value="mild">Mild — feet/ankles</option>
-                    <option value="severe">Severe — face/hands</option>
-                  </select>
-                  <select value={visitForm.protein} onChange={(e) => setVisitForm({ ...visitForm, protein: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm">
-                    <option value="">Proteinuria</option>
-                    <option value="none">None / Not tested</option>
-                    <option value="trace">Trace (+)</option>
-                    <option value="positive">Positive (++ or more)</option>
-                  </select>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Oedema (Swelling)</label>
+                    <select value={visitForm.oedema} onChange={(e) => setVisitForm({ ...visitForm, oedema: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface">
+                      <option value="">Select oedema status</option>
+                      <option value="none">None</option>
+                      <option value="mild">Mild — feet/ankles</option>
+                      <option value="severe">Severe — face/hands</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant">Proteinuria (Urine Protein)</label>
+                    <select value={visitForm.protein} onChange={(e) => setVisitForm({ ...visitForm, protein: e.target.value })} className="px-3 py-2 border border-outline-variant rounded-lg text-sm bg-surface">
+                      <option value="">Select protein status</option>
+                      <option value="none">None / Not tested</option>
+                      <option value="trace">Trace (+)</option>
+                      <option value="positive">Positive (++ or more)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -755,29 +793,59 @@ function DetailView({ patient, getMlRiskData, getRiskColor, setActiveView, setSh
                 <div className="flex justify-between items-start mb-3">
                   <div className="text-xs text-on-surface-variant">{new Date(v.date).toLocaleDateString("en-NG")} {v.week && `· Week ${v.week}`}</div>
                 </div>
-                <div className="grid grid-cols-4 gap-2 text-xs">
-                  <div className="bg-surface-container p-2 rounded">
-                    <div className="text-on-surface-variant text-xs mb-1">SYSTOLIC BP</div>
-                    <div className="font-bold text-on-surface">{v.sbp} mmHg</div>
-                  </div>
-                  <div className="bg-surface-container p-2 rounded">
-                    <div className="text-on-surface-variant text-xs mb-1">DIASTOLIC BP</div>
-                    <div className="font-bold text-on-surface">{v.dbp} mmHg</div>
-                  </div>
-                  {v.hr && (
-                    <div className="bg-surface-container p-2 rounded">
-                      <div className="text-on-surface-variant text-xs mb-1">HEART RATE</div>
-                      <div className="font-bold text-on-surface">{v.hr} bpm</div>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-surface-container p-2.5 rounded">
+                      <div className="text-on-surface-variant text-[10px] mb-1 font-bold">SYSTOLIC BP</div>
+                      <div className="font-bold text-on-surface">{v.sbp} <span className="text-[10px] font-normal">mmHg</span></div>
                     </div>
-                  )}
-                  {v.weight && (
-                    <div className="bg-surface-container p-2 rounded">
-                      <div className="text-on-surface-variant text-xs mb-1">WEIGHT</div>
-                      <div className="font-bold text-on-surface">{v.weight} kg</div>
+                    <div className="bg-surface-container p-2.5 rounded">
+                      <div className="text-on-surface-variant text-[10px] mb-1 font-bold">DIASTOLIC BP</div>
+                      <div className="font-bold text-on-surface">{v.dbp} <span className="text-[10px] font-normal">mmHg</span></div>
                     </div>
-                  )}
+                    {v.hr && (
+                      <div className="bg-surface-container p-2.5 rounded">
+                        <div className="text-on-surface-variant text-[10px] mb-1 font-bold">HEART RATE</div>
+                        <div className="font-bold text-on-surface">{v.hr} <span className="text-[10px] font-normal">bpm</span></div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    {v.bs && (
+                      <div className="bg-surface-container p-2.5 rounded">
+                        <div className="text-on-surface-variant text-[10px] mb-1 font-bold">BLOOD SUGAR</div>
+                        <div className="font-bold text-on-surface">{v.bs} <span className="text-[10px] font-normal">mmol/L</span></div>
+                      </div>
+                    )}
+                    {v.temp && (
+                      <div className="bg-surface-container p-2.5 rounded">
+                        <div className="text-on-surface-variant text-[10px] mb-1 font-bold">TEMPERATURE</div>
+                        <div className="font-bold text-on-surface">{v.temp} <span className="text-[10px] font-normal">°C</span></div>
+                      </div>
+                    )}
+                    {v.weight && (
+                      <div className="bg-surface-container p-2.5 rounded">
+                        <div className="text-on-surface-variant text-[10px] mb-1 font-bold">WEIGHT</div>
+                        <div className="font-bold text-on-surface">{v.weight} <span className="text-[10px] font-normal">kg</span></div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {v.oedema && v.oedema !== "none" && (
+                      <div className="bg-amber-50 border border-amber-200 p-2.5 rounded">
+                        <div className="text-amber-900 text-[10px] mb-1 font-bold">OEDEMA</div>
+                        <div className="font-bold text-amber-800 capitalize">{v.oedema}</div>
+                      </div>
+                    )}
+                    {v.protein && v.protein !== "none" && (
+                      <div className="bg-red-50 border border-red-200 p-2.5 rounded">
+                        <div className="text-red-900 text-[10px] mb-1 font-bold">PROTEINURIA</div>
+                        <div className="font-bold text-red-800 capitalize">{v.protein}</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {v.notes && <div className="mt-3 text-xs italic text-on-surface-variant">"{v.notes}"</div>}
+                {v.notes && <div className="mt-3 text-xs italic text-on-surface-variant border-l-2 border-on-surface-variant/30 pl-2">"{v.notes}"</div>}
               </div>
             ))}
           </div>
