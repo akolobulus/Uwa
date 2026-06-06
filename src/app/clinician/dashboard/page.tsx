@@ -426,6 +426,11 @@ export default function ClinicianDashboard() {
     };
   };
 
+  const handleVoiceNavigation = (patientId: string) => {
+    setActivePatientId(patientId);
+    setActiveView("detail");
+  };
+
   const getRiskColor = (colour: string) => {
     switch (colour) {
       case "critical":
@@ -549,8 +554,12 @@ export default function ClinicianDashboard() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-7">
-          {/* NEW VOICE CONTROLLER INTERFACE */}
-          {activeView === "overview" && <VoiceAssistant onRefreshRequired={loadPatients} />}
+          {/* Voice Assistant - visible on all views */}
+          <VoiceAssistant 
+            onRefreshRequired={loadPatients}
+            onNavigateToPatient={handleVoiceNavigation}
+            activePatientId={activePatientId}
+          />
 
           {activeView === "overview" && <OverviewView patients={patients} getMlRiskData={getMlRiskData} getRiskColor={getRiskColor} setActiveView={setActiveView} setActivePatientId={setActivePatientId} setShowAddPatientModal={setShowAddPatientModal} />}
           {activeView === "patients" && <PatientsView patients={patients} getMlRiskData={getMlRiskData} getRiskColor={getRiskColor} searchQuery={searchQuery} setActiveView={setActiveView} setActivePatientId={setActivePatientId} />}

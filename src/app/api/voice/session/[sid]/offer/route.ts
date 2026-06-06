@@ -1,90 +1,84 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from "next/server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-// Define type schema for Next.js 16+ where params is a Promise
 type RouteContext = {
   params: Promise<{ sid: string }>;
 };
 
+/**
+ * POST /api/voice/session/[sid]/offer
+ *
+ * Relays the browser's SDP offer to Aethex and returns the server's SDP answer.
+ */
 export async function POST(req: NextRequest, context: RouteContext) {
-  // 1. Explicitly unwrap the dynamic route parameters promise
-  const { sid } = await context.params;
-  
-  // Clean Fix: Read body as text first to verify it isn't empty
-  const rawText = await req.text();
-  if (!rawText) {
-    return NextResponse.json({ error: "Empty signaling payload received" }, { status: 400 });
-  }
-  
-  const body = JSON.parse(rawText);
+  try {
+    console.log("[Offer Route] POST /api/voice/session/[sid]/offer called");
 
-  // 2. Forward signaling details to Aethex using the unwrapped variable
-  const res = await fetch(`https://api.aethexai.com/api/v1/conversation/${sid}/offer`, {
-    method: 'POST',
-    headers: {
-      'X-API-Key': process.env.AETHEX_API_KEY!,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+    const { sid: sessionId } = await context.params;
+    console.log(`[Offer Route] Extracted sessionId: ${sessionId}`);
 
-  const data = await res.json();
-
-  // INTERCEPT FUNCTION CALLS FROM MAYA IF PRESENT IN RESPONSE
-  if (data.tool_calls) {
-    for (const call of data.tool_calls) {
-      const args = JSON.parse(call.arguments);
-
-      if (call.name === 'search_patient') {
-        const { data: matches } = await supabase
-          .from('patients')
-          .select('*')
-          .ilike('name', `%${args.query}%`);
-        call.output = JSON.stringify(matches ?? []);
-      }
-
-      else if (call.name === 'add_patient') {
-        const { error } = await supabase.from('patients').insert({
-          id: 'p_' + Date.now(),
-          name: args.name,
-          age: args.age,
-          week: args.week,
-          state: args.state ?? null,
-          scd: 'AA',
-          hiv: 'Negative',
-          malaria: '0',
-          iptp_doses: '0',
-          htn: '0',
-          multiple: '0',
-          facility: '1',
-          multiparity: '0',
-        });
-        call.output = JSON.stringify({ success: !error, error: error?.message });
-      }
-
-      else if (call.name === 'remove_patient') {
-        const { error } = await supabase.from('patients').delete().eq('id', args.patient_id);
-        call.output = JSON.stringify({ success: !error, error: error?.message });
-      }
+    let sdp: string;
+    let type: string;
+    try {
+      const body = await req.json();
+      sdp = body.sdp;
+      type = body.type;
+      console.log(`[Offer Route] Parsed SDP type: ${type}`);
+    } catch (parseErr) {
+      console.error("[Offer Route] Failed to parse request JSON:", parseErr);
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
     }
 
-    // Return the executed loop results back up into the audio pipeline execution stack
-    const followUpRes = await fetch(`https://api.aethexai.com/api/v1/conversation/${sid}/tools-response`, {
-      method: 'POST',
-      headers: {
-        'X-API-Key': process.env.AETHEX_API_KEY!,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ tool_outputs: data.tool_calls }),
-    });
-    return NextResponse.json(await followUpRes.json());
-  }
+    if (!process.env.AETHEX_API_KEY) {
+      console.error("[Offer Route] AETHEX_API_KEY is not defined");
+      return NextResponse.json(
+        { error: "AETHEX_API_KEY is not defined" },
+        { status: 500 }
+      );
+    }
 
-  return NextResponse.json(data, { status: res.status });
+    console.log("[Offer Route] Sending offer to Aethex...");
+    const res = await fetch(
+      `https://api.aethexai.com/api/v1/conversation/${sessionId}/offer`,
+      {
+        method: "POST",
+        headers: {
+          "X-API-Key": process.env.AETHEX_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sdp, type }),
+        signal: AbortSignal.timeout(12_000),
+      }
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(
+        `[Offer Route] Aethex SDP exchange rejected ${res.status}:`,
+        body
+      );
+      return NextResponse.json(
+        {
+          error: `Aethex SDP exchange rejected: ${res.status} — ${body}`,
+        },
+        { status: 502 }
+      );
+    }
+
+    console.log("[Offer Route] Successfully received SDP answer from Aethex");
+    const answer = await res.json();
+    return NextResponse.json(answer);
+  } catch (err: any) {
+    console.error("[Offer Endpoint Framework Exception]:", err);
+    return NextResponse.json(
+      {
+        error: err.message || "Internal Framework Error",
+        details: err?.message || String(err),
+      },
+      { status: 500 }
+    );
+  }
 }
 
