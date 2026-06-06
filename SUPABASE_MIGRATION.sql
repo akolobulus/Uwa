@@ -47,6 +47,7 @@ CREATE TABLE visits (
   risk_pre INTEGER,
   risk_ptl INTEGER,
   risk_drivers TEXT,
+  engine_result JSONB,
   scored_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

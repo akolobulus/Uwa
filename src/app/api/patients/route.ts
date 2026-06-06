@@ -1,10 +1,74 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import type { RiskEngineResult } from '@/app/api/risk-narrative/route';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+type VisitRow = {
+  id: string;
+  date: string;
+  week: number | null;
+  sbp: number;
+  dbp: number;
+  hr: number | null;
+  bs: number | null;
+  temp: number | null;
+  weight: number | null;
+  notes: string | null;
+  oedema: string | null;
+  protein: string | null;
+  risk_composite: number | null;
+  risk_colour: string | null;
+  risk_priority: string | null;
+  risk_pph?: number | null;
+  risk_pre?: number | null;
+  risk_ptl?: number | null;
+  risk_drivers?: string | null;
+  engine_result?: RiskEngineResult | null;
+  scored_at: string | null;
+};
+
+type PatientRow = {
+  id: string;
+  name: string;
+  age: number;
+  state: string | null;
+  week: number;
+  anc_week: number | null;
+  gravidity: number | null;
+  scd: string;
+  hiv: string;
+  malaria: string;
+  iptp_doses: string;
+  htn: string;
+  multiple: string;
+  facility: string;
+  multiparity: string;
+  created_at: string;
+  visits?: VisitRow[] | null;
+};
+
+type PatientPostBody = {
+  id: string;
+  name: string;
+  age: number;
+  state?: string | null;
+  week: number;
+  ancWeek?: number | null;
+  gravidity?: number | null;
+  scd: string;
+  hiv: string;
+  malaria: string;
+  iptpDoses: string;
+  htn: string;
+  multiple: string;
+  facility: string;
+  multiparity: string;
+  createdAt?: string;
+};
 
 export async function GET() {
   const { data, error } = await supabase
@@ -22,7 +86,9 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const patients = (data ?? []).map((p: any) => ({
+  const rows = (data ?? []) as PatientRow[];
+
+  const patients = rows.map((p) => ({
     id: p.id,
     name: p.name,
     age: p.age,
@@ -42,8 +108,8 @@ export async function GET() {
     visits: (p.visits ?? [])
       // BUG FIX 2: Sort visits by date descending here so the frontend
       // "latest visit" logic is always consistent regardless of insert order
-      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .map((v: any) => ({
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .map((v) => ({
         id: v.id,
         date: v.date,
         week: v.week,
@@ -62,6 +128,11 @@ export async function GET() {
         // The DB may store "GREEN", "AMBER", "RED" from the ML engine default.
         riskColour: normaliseColour(v.risk_colour),
         riskPriority: v.risk_priority,
+        riskPph: v.risk_pph,
+        riskPre: v.risk_pre,
+        riskPtl: v.risk_ptl,
+        riskDrivers: v.risk_drivers,
+        engineResult: v.engine_result ?? null,
         scoredAt: v.scored_at,
       })),
   }));
@@ -70,7 +141,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const body = (await req.json()) as Partial<PatientPostBody>;
 
   if (!body.name || !body.age || !body.week) {
     return NextResponse.json(

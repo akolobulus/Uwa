@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import VoiceAssistant from "@/components/VoiceAssistant";
+import { RiskNarrativePanel } from "@/components/RiskNarrativePanel";
+import type { RiskEngineResult, ConditionKey } from "@/app/api/risk-narrative/route";
 
 type Risk = {
   pph: number;
@@ -32,6 +34,11 @@ type Visit = {
   riskComposite?: number;
   riskColour?: string;
   riskPriority?: string;
+  riskPph?: number | null;
+  riskPre?: number | null;
+  riskPtl?: number | null;
+  riskDrivers?: string | null;
+  engineResult?: RiskEngineResult | null;
   scoredAt?: string;
 };
 
@@ -54,6 +61,56 @@ type Patient = {
   visits: Visit[];
   createdAt: string;
 };
+
+function conditionScore(engineResult: RiskEngineResult | null | undefined, key: ConditionKey) {
+  const score = engineResult?.conditions?.[key]?.score_0_to_100;
+  return typeof score === "number" && Number.isFinite(score) ? Math.round(score) : undefined;
+}
+
+function conditionFlag(engineResult: RiskEngineResult | null | undefined, key: ConditionKey) {
+  const flagged = engineResult?.conditions?.[key]?.flagged;
+  return typeof flagged === "boolean" ? flagged : undefined;
+}
+
+function buildEngineResultFromVisit(latestVisit: Visit, risk: Risk): RiskEngineResult | null {
+  if (latestVisit.engineResult) return latestVisit.engineResult;
+  if (!latestVisit.scoredAt) return null;
+
+  const composite = latestVisit.riskComposite ?? risk.composite ?? 0;
+  const drivers = latestVisit.riskDrivers || latestVisit.notes || "No condition-specific SHAP driver narrative was stored.";
+
+  return {
+    composite_score: composite,
+    any_flagged: risk.flags.pph || risk.flags.pre || risk.flags.ptl,
+    priority: latestVisit.riskPriority ?? risk.priority,
+    priority_colour: latestVisit.riskColour?.toUpperCase() ?? "GREEN",
+    conditions: {
+      PPH: {
+        condition: "Postpartum haemorrhage",
+        probability: risk.pph / 100,
+        score_0_to_100: risk.pph,
+        flagged: risk.flags.pph,
+        top_drivers: drivers,
+      },
+      Preeclamp: {
+        condition: "Preeclampsia/eclampsia",
+        probability: risk.pre / 100,
+        score_0_to_100: risk.pre,
+        flagged: risk.flags.pre,
+        top_drivers: drivers,
+      },
+      Preterm: {
+        condition: "Preterm labour",
+        probability: risk.ptl / 100,
+        score_0_to_100: risk.ptl,
+        flagged: risk.flags.ptl,
+        top_drivers: drivers,
+      },
+    },
+    timestamp: latestVisit.scoredAt,
+    model_version: "nurture-v2.0",
+  };
+}
 
 function MaterialIcon({
   children,
@@ -103,6 +160,7 @@ export default function ClinicianDashboard() {
     htn: "0",
     multiple: "0",
     facility: "1",
+    multiparity: "0",
   });
 
   // Form states for visit
@@ -206,7 +264,7 @@ export default function ClinicianDashboard() {
         htn: patientForm.htn,
         multiple: patientForm.multiple,
         facility: patientForm.facility,
-        multiparity: parsedGravidity >= 5 ? "1" : "0",
+        multiparity: patientForm.multiparity || (parsedGravidity >= 5 ? "1" : "0"),
         visits: [],
         createdAt: new Date().toISOString(),
       };
@@ -222,7 +280,7 @@ export default function ClinicianDashboard() {
       await loadPatients();
       setShowAddPatientModal(false);
       setPatientForm({ name:'', dateOfBirth:'', state:'', week:'', ancWeek:'', gravidity:'1',
-        scd:'AA', hiv:'Negative', malaria:'0', iptpDoses:'0', htn:'0', multiple:'0', facility:'1' });
+        scd:'AA', hiv:'Negative', malaria:'0', iptpDoses:'0', htn:'0', multiple:'0', facility:'1', multiparity:'0' });
       setActivePatientId(newPatient.id);
       setActiveView('detail');
     } catch (err: any) {
@@ -328,18 +386,33 @@ export default function ClinicianDashboard() {
     const latestVisit = sorted[0];
 
     // Read the ML results that came back from Render and were stored in Supabase
-    const composite = latestVisit.riskComposite ?? 0;
+    const engineResult = latestVisit.engineResult;
+    const composite = latestVisit.riskComposite ?? engineResult?.composite_score ?? 0;
     const colour = (latestVisit.riskColour?.toLowerCase() || "low") as "critical" | "high" | "moderate" | "low";
     const priority = latestVisit.riskPriority || "PENDING EVALUATION";
 
-    // Split flags based on ML threshold
+    const fallbackScore = latestVisit.scoredAt ? composite : 0;
+    const pph = latestVisit.riskPph ?? conditionScore(engineResult, "PPH") ?? fallbackScore;
+    const pre = latestVisit.riskPre ?? conditionScore(engineResult, "Preeclamp") ?? fallbackScore;
+    const ptl = latestVisit.riskPtl ?? conditionScore(engineResult, "Preterm") ?? fallbackScore;
+
+    // Prefer engine flags; fall back to the clinical threshold used by the ML API.
     const flags = {
-      pph: composite >= 25,
-      pre: composite >= 25,
-      ptl: composite >= 25,
+      pph: conditionFlag(engineResult, "PPH") ?? pph >= 25,
+      pre: conditionFlag(engineResult, "Preeclamp") ?? pre >= 25,
+      ptl: conditionFlag(engineResult, "Preterm") ?? ptl >= 25,
     };
 
-    const drivers = latestVisit.notes ? ["Clinical History Note Included"] : [];
+    const drivers =
+      latestVisit.riskDrivers
+        ? [latestVisit.riskDrivers]
+        : engineResult?.conditions
+          ? Object.values(engineResult.conditions)
+              .map((condition) => condition?.top_drivers)
+              .filter((driver): driver is string => Boolean(driver))
+          : latestVisit.notes
+            ? ["Clinical History Note Included"]
+            : [];
 
     return {
       composite,
@@ -347,9 +420,9 @@ export default function ClinicianDashboard() {
       priority,
       flags,
       drivers,
-      pph: 0,
-      pre: 0,
-      ptl: 0,
+      pph,
+      pre,
+      ptl,
     };
   };
 
@@ -742,6 +815,8 @@ function DetailView({ patient, getMlRiskData, getRiskColor, setActiveView, setSh
   const risk = getMlRiskData(patient);
   const initials = patient.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
   const visits = patient.visits ? [...patient.visits].sort((a: Visit, b: Visit) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
+  const latestVisit = visits[0] ?? null;
+  const engineResult = latestVisit ? buildEngineResultFromVisit(latestVisit, risk) : null;
 
   return (
     <div>
@@ -778,6 +853,15 @@ function DetailView({ patient, getMlRiskData, getRiskColor, setActiveView, setSh
           <RiskScoreCard label="Preeclampsia / Eclampsia" score={risk.pre} flagged={risk.flags.pre} color="amber" />
           <RiskScoreCard label="Preterm Labour" score={risk.ptl} flagged={risk.flags.ptl} color="blue" />
         </div>
+      </div>
+
+      <div className="mb-5">
+        <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-3">AI Clinical Narrative</h3>
+        <RiskNarrativePanel
+          patient={patient}
+          latestVisit={latestVisit}
+          engineResult={engineResult}
+        />
       </div>
 
       <div>
