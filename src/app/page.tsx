@@ -298,7 +298,7 @@ export default function Home() {
 
           <div className="relative z-10 mx-auto grid w-full max-w-[90rem] grid-cols-1 items-center gap-lg lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-xl">
             <div className="order-2 flex items-center justify-center lg:order-1">
-              <div className="animate-float relative w-full max-w-[42rem] xl:max-w-[46rem]">
+              <div className="animate-float relative w-full max-w-[36rem] xl:max-w-[40rem]">
                 <div className="absolute inset-0 -z-10 scale-125 rounded-full bg-primary/5 blur-3xl" />
                 <Image
                   alt="Diverse pregnant women in a circle on grass with a park bench and woven mat"
