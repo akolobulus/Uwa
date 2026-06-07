@@ -1,3 +1,8 @@
+// ARCHIVED: Old mother baby page
+// Replaced by main mother dashboard with integrated NurtureAI
+// Route: /mother
+
+/*
 'use client';
 
 import Link from 'next/link';
@@ -9,7 +14,7 @@ type HospitalBagItems = {
   'mat': boolean;
 };
 
-export default function MotherBaby() {
+/* export default function MotherBaby() {
   const [kickCount, setKickCount] = useState(12);
   const [hospitalBag, setHospitalBag] = useState<HospitalBagItems>({
     'baby-clothes': false,
@@ -246,3 +251,4 @@ export default function MotherBaby() {
     </div>
   );
 }
+*/

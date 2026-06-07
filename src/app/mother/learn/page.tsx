@@ -1,9 +1,14 @@
+// ARCHIVED: Old mother learn page
+// Replaced by main mother dashboard with integrated NurtureAI
+// Route: /mother
+
+/*
 'use client';
 
 import Link from 'next/link';
 import { useState } from 'react';
 
-export default function MotherLearn() {
+/* export default function MotherLearn() {
   const [activeFilter, setActiveFilter] = useState('All Lessons');
 
   return (
@@ -256,3 +261,6 @@ export default function MotherLearn() {
     </>
   );
 }
+* / 
+ 
+ 

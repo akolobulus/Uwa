@@ -1,3 +1,8 @@
+// ARCHIVED: Old mother profile page
+// Replaced by main mother dashboard with integrated NurtureAI
+// Route: /mother
+
+/*
 'use client';
 
 import Link from 'next/link';
@@ -264,3 +269,6 @@ export default function MotherProfile() {
     </>
   );
 }
+* / 
+ 
+ 

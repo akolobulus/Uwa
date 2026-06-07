@@ -78,14 +78,12 @@ function MaterialIcon({
 
 function LogoMark({ size = "h-10 w-10" }: { size?: string }) {
   return (
-    <div
-      aria-hidden="true"
-      className={`${size} flex items-center justify-center rounded-full bg-primary text-on-primary shadow-sm`}
-    >
-      <MaterialIcon className="text-[22px]" filled>
-        favorite
-      </MaterialIcon>
-    </div>
+    <img
+      src="/site logo.png"
+      alt="Nurture Logo"
+      className={`${size} rounded-full object-cover shadow-sm`}
+      style={{ borderRadius: "50%" }}
+    />
   );
 }
 

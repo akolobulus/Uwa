@@ -1,3 +1,8 @@
+// ARCHIVED: Old mother check page
+// Replaced by main mother dashboard with integrated NurtureAI
+// Route: /mother
+
+/*
 'use client';
 
 import Link from 'next/link';
@@ -20,7 +25,7 @@ const symptoms: Symptom[] = [
   { id: 'breathing', name: 'Difficulty breathing', icon: 'air' },
 ];
 
-export default function MotherCheck() {
+/* export default function MotherCheck() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<Set<string>>(new Set());
 
   const toggleSymptom = (symptomId: string) => {
@@ -168,3 +173,6 @@ export default function MotherCheck() {
     </>
   );
 }
+* / 
+ 
+ 
