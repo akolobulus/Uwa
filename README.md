@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License"/>
   </p>
   <p>
-    Built for <strong>The Artificial Future Hackathon 2026</strong> · Healthcare Access Track
+    Built by Akolo Bulus
   </p>
 </div>
 
@@ -439,9 +439,7 @@ Most maternal health tools in Nigeria are either paper-based, SMS-only, or gener
 
 **2. It explains itself.** Every risk flag comes with a plain-English explanation that quotes real numbers and real history. A nurse doesn't need to trust a black box — she can see exactly what the system saw.
 
-**3. It works for both the clinician and the mother.** Most tools pick one. Nurture connects both sides: a mother's symptoms reported via chat appear in the clinician's portal, and a doctor flagged as on-duty is reachable from the mother's emergency button.
-
----
+**3. It works for both the clinician and the mother.** Most tools pick one. Nurture connects both sides: a mother's symptoms reported via chat appear in the clinician's portal, and a doctor flagged as on-duty is 
 
 ## Team
 
@@ -452,20 +450,6 @@ Contribution
 
 **Akolo Bulus**
 Full-stack engineering, ML pipeline, AI integration, product design
-
-**Bede Nwankwo**
-_(contributor)_
-
-**Oluyemi Temitayo**
-_(contributor)_
-
-**Adepoju Adewale**
-_(contributor)_
-
-_Submitted for The Artificial Future Hackathon 2026 — Healthcare Access Track._
-_Date submitted: June 7, 2026_
-
----
 
 ## Acknowledgements
 
